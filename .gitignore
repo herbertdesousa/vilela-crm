@@ -36,6 +36,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# export do protótipo antigo (localStorage) — contém dados reais de clientes
+docs.json
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
