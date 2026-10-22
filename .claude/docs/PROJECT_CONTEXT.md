@@ -213,6 +213,15 @@ simples de usar", **priorize o segundo**, e documente a troca feita.
    para sempre — notas, PMOC e CRM vêm depois, então tipos de documento e relacionamento com
    cliente devem ser modelados como entidades primeiras (Empresa, Cliente, Documento), não
    hardcoded.
+5. **MVP pragmático, zero overengineering (regra explícita do usuário, 2026-10-21).** O objetivo
+   agora é entregar algo que funcione e gere valor/receita, não a arquitetura mais "correta".
+   Isso tempera os princípios 2 e 4: eles descrevem a direção de longo prazo do modelo de dados,
+   não uma exigência de implementar tudo normalizado/multi-tenant desde a primeira versão que
+   sobe pra produção. Construir a versão mais simples que resolve o problema real agora; só
+   adicionar camada/abstração quando o MVP provar que precisa. Custo de infraestrutura baixo é
+   requisito, não preferência (ver seção 8). Seguir a arquitetura de projetos de referência já
+   validados pelo usuário (ex.: `C:\MyStuffs\check-luna` — Next.js App Router + Drizzle + Postgres
+   via Supabase + organização por feature) em vez de inventar estrutura nova.
 
 ## 8. Decisões de arquitetura (confirmadas com o usuário)
 
@@ -363,6 +372,12 @@ self-host de LLM por enquanto.
 
 ## 11. Canal de entrada: WhatsApp + extração por IA (decisão de arquitetura)
 
+**Status (2026-10-21): MVP ponta a ponta implementado e pronto pra testar na Vercel.**
+WhatsApp (Z-API) → extração por IA (Claude Haiku 4.5) → Postgres (Supabase) → página pública
+`/d/[id]`. Ver "Status: MVP implementado" ao final desta seção para o que foi construído de
+fato, inclusive as simplificações deliberadas em relação ao plano original (sem auth, sem
+etapa de revisão humana ainda).
+
 Em vez de o técnico preencher um formulário web pra criar o orçamento/recibo, ele manda uma
 mensagem de texto livre pelo WhatsApp — jeito que ele já usa todo dia — e o sistema extrai os
 dados estruturados automaticamente. É a aplicação mais direta do princípio da seção 6: zero
@@ -404,10 +419,10 @@ decisão da seção 8 (link tokenizado + PDF via impressão nativa) segue valend
 
 | Componente | Opção recomendada | Custo esperado no volume do MVP |
 |---|---|---|
-| Canal WhatsApp | **Meta WhatsApp Business Cloud API** (oficial) | Grátis — mensagem dentro da janela de 24h de conversa iniciada pelo usuário (o técnico manda pro bot) não é cobrada; só mensagem de template fora dessa janela custa |
-| Servidor | Next.js (API route de webhook) na Vercel, free tier | Grátis no volume esperado |
-| Banco de dados | Supabase free tier (Postgres) | Grátis até 500MB — ok pro MVP |
-| Extração por IA | Modelo "mini/flash" hospedado via API (ex.: Gemini Flash — tier grátis generoso — ou Claude Haiku, ambos muito baratos por chamada), com saída estruturada (JSON/function-calling) | Centavos por mês no volume esperado (mensagens curtas, poucas por dia) |
+| Canal WhatsApp | **Z-API** (wrapper brasileiro pago, instância própria) — **em uso** | Assinatura mensal por instância (não é pay-per-conversa como a Meta direto) — verificar valor atual no painel; é um desvio do plano original (Meta Cloud API oficial, grátis na janela de 24h) escolhido por rapidez/simplicidade de setup. Revisitar se o custo mensal pesar no volume real |
+| Servidor | Next.js (API route de webhook) na Vercel, free tier — **em uso** | Grátis no volume esperado |
+| Banco de dados | Postgres hospedado no Supabase (free tier), acessado via **connection string direta + Drizzle ORM** — **em uso**. Sem `supabase-js`: Supabase aqui é só o host do Postgres, não a camada de API | Grátis até 500MB — ok pro MVP |
+| Extração por IA | **Claude Haiku 4.5** via `@anthropic-ai/sdk` (structured outputs: `client.beta.messages.parse` + `betaZodOutputFormat`) — **em uso**, decidido em vez de Gemini Flash | ~US$1/US$5 por 1M tokens de entrada/saída — frações de centavo por mensagem no volume esperado |
 
 **Por que não self-host de um modelo de IA agora**: rodar um LLM pequeno (Llama/Qwen/Phi via
 Ollama) no próprio servidor exige uma VPS com CPU/GPU dedicada rodando 24/7 — o custo fixo disso
@@ -443,6 +458,84 @@ Cadastro de clientes recorrentes, resolução automática ("esse cliente já exi
 informação adicional ao técnico via WhatsApp quando a mensagem vier incompleta — ficam para
 depois. Por ora, cada mensagem gera um rascunho novo e o técnico completa o que faltar na tela
 de revisão.
+
+### Status: MVP implementado (2026-10-21)
+
+Pipeline completo, de ponta a ponta, pronto pra subir na Vercel e testar com o número de WhatsApp
+real:
+
+```
+WhatsApp (técnico) → Z-API → webhook Next.js → Claude Haiku 4.5 (JSON estruturado)
+  → Postgres (Supabase, via Drizzle) → link /d/[id] → WhatsApp (resposta ao técnico)
+```
+
+**Payload real recebido no webhook da Z-API** (evento de mensagem de texto recebida):
+
+```json
+{
+  "isStatusReply": false,
+  "chatLid": "172430085636246@lid",
+  "connectedPhone": "5511952875335",
+  "waitingMessage": false,
+  "isEdit": false,
+  "isGroup": false,
+  "isNewsletter": false,
+  "instanceId": "3FAFD5E8F49811062BAC0EF1D1AA3B09",
+  "messageId": "3BC0A860C1885F6C533D",
+  "phone": "5511984294545",
+  "fromMe": false,
+  "momment": 1792627110000,
+  "status": "RECEIVED",
+  "chatName": "bruno",
+  "senderName": "Bruno",
+  "broadcast": false,
+  "forwarded": false,
+  "type": "ReceivedCallback",
+  "fromApi": false,
+  "text": { "message": "Boa" }
+}
+```
+O código só processa `type === "ReceivedCallback"`, `fromMe === false`, `isGroup === false` e
+mensagem com pelo menos ~20 caracteres (mensagens curtas tipo "Boa"/"oi" são ignoradas — evita
+gastar chamada de IA com conversa fiada).
+
+**Estrutura de código** (seguindo a arquitetura de referência `C:\MyStuffs\check-luna`: Next.js
+App Router + Drizzle ORM + Postgres via `postgres`/pooler do Supabase, organização por feature
+em `src/features/<feature>/`, nomes de código em inglês):
+
+```
+src/
+  app/
+    api/whatsapp/webhook/route.ts   # recebe o payload da Z-API
+    d/[id]/page.tsx                 # página pública do documento
+  db/
+    schema.ts                       # tabela tb_documents (id, phone, originalText, data jsonb)
+    index.ts                        # client drizzle (postgres-js)
+  features/
+    document/
+      schema.ts                     # ExtractedDocumentSchema (zod)
+      extract-document.ts           # chamada ao Claude Haiku 4.5
+      create-document.ts            # insert no banco
+      get-document.ts               # select por id
+      components/document-view.tsx  # render da página pública
+    whatsapp/
+      zapi-client.ts                # sendMessage via Z-API
+```
+
+**Simplificações deliberadas do MVP** (modo "zero overengineering", ver decisão de produto
+abaixo) — cada uma é uma dívida técnica consciente, não um esquecimento:
+- **Sem etapa de revisão humana antes do link ser enviado.** O fluxo original (seção 11, texto
+  acima) previa o técnico confirmar um rascunho antes do link existir. No MVP, o webhook já
+  responde com o link público direto. **Isso precisa ser reavaliado antes de usar com cliente de
+  verdade** — por ora serve pra validar a extração e o pipeline técnico.
+- **Sem autenticação/multi-tenant.** Uma única empresa implícita, sem login. O modelo de dados
+  da seção 9 (Empresa/Cliente/Documento normalizados) também não foi implementado — o MVP guarda
+  o JSON extraído direto numa coluna `jsonb` (`tb_documents.data`), sem tabelas separadas de
+  item/cliente/empresa.
+- **Sem CNPJ lookup, sem PDF, sem assinatura, sem dados bancários.** Só o essencial pra validar
+  "mensagem → documento → link".
+
+Essas simplificações devem ser corrigidas na ordem que o produto realmente precisar — não antes.
 
 ## Referências
 - [Art. 40 do CDC (Lei 8.078/90)](https://www.jusbrasil.com.br/topicos/10602210/artigo-40-da-lei-n-8078-de-11-de-setembro-de-1990)

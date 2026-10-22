@@ -11,6 +11,15 @@ WhatsApp (jeito que já usa no dia a dia). Um webhook recebe a mensagem, um LLM 
 ("mini/flash", ex. Gemini Flash ou Claude Haiku) extrai os dados estruturados (cliente, local,
 itens, equipamentos, materiais, valor), e o resultado é salvo como rascunho.
 
+**Status em 2026-10-21**: MVP completo implementado (WhatsApp Z-API → Claude Haiku 4.5 →
+Postgres/Supabase via Drizzle → página pública `/d/[id]`), pronto pra subir na Vercel. Z-API
+(pago) foi usado em vez da Meta Cloud API oficial (grátis) — troca por rapidez de setup, vale
+revisitar custo depois. **Simplificação deliberada do MVP**: a etapa de revisão humana antes do
+link ir pro cliente (descrita abaixo) ainda não está implementada — o webhook já responde com o
+link direto. Isso é uma dívida técnica consciente pra validar o pipeline rápido, não pra usar
+com cliente real ainda. Detalhe completo em `.claude/docs/PROJECT_CONTEXT.md` seção 11,
+"Status: MVP implementado".
+
 **Why:** usuários finais deste produto não são familiarizados com tecnologia (ver
 [[prefers-phased-cheap-architecture]] e o princípio geral de simplicidade do projeto) — WhatsApp
 é zero fricção porque é o canal que eles já usam, contra um formulário que é uma tela nova pra

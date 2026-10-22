@@ -21,3 +21,10 @@ por IA via mensagem (modelo hospedado "mini/flash" em vez de self-host de LLM vi
 projetos futuros deste usuário com perfil parecido — pequena empresa, custo sensível), apresentar
 a opção gerenciada/gratuita como padrão, e só sugerir self-host ou infraestrutura própria quando
 houver um gatilho concreto de volume/custo que justifique — nunca como primeira recomendação.
+
+**Nuance (2026-10-21)**: na prática, pro canal de WhatsApp, o usuário escolheu a Z-API (paga,
+assinatura mensal) em vez da Meta Cloud API oficial (grátis) que eu tinha recomendado — trocou
+"mais barato" por "mais rápido/simples de configurar" nesse caso específico. Ou seja, a
+preferência por custo mínimo não é absoluta: rapidez de setup pode pesar mais quando o custo
+gratuito exige mais passos de configuração/aprovação. Ao recomendar, vale apresentar as duas
+dimensões (custo e fricção de setup) em vez de assumir que custo mínimo sempre vence.
