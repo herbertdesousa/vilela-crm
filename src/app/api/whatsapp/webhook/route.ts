@@ -16,6 +16,10 @@ type ZApiCallback = {
 // Mensagens muito curtas ("oi", "boa") não valem uma chamada à IA - evita custo à toa.
 const MIN_LENGTH = 20;
 
+// Fase de teste: só processa esse número, pra não gastar token com qualquer mensagem
+// que chegar na instância enquanto testamos.
+const ALLOWED_PHONE = "5511952875335";
+
 export async function POST(req: NextRequest) {
   const body: ZApiCallback = await req.json();
 
@@ -24,6 +28,7 @@ export async function POST(req: NextRequest) {
     body.type === "ReceivedCallback" &&
     !body.fromMe &&
     !body.isGroup &&
+    body.phone === ALLOWED_PHONE &&
     text &&
     text.length >= MIN_LENGTH;
 
