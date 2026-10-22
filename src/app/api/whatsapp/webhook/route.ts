@@ -6,7 +6,7 @@ import { sendMessage } from "@/features/whatsapp/zapi-client";
 
 const MIN_LENGTH = 20;
 
-const ALLOWED_PHONE = "5511952875335";
+const ALLOWED_PHONE = "5511954881948";
 
 const ZApiCallbackSchema = z.object({
   type: z.string(),
