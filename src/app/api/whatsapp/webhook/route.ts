@@ -21,38 +21,64 @@ const MIN_LENGTH = 20;
 const ALLOWED_PHONE = "5511952875335";
 
 export async function POST(req: NextRequest) {
-  const body: ZApiCallback = await req.json();
+  let body: ZApiCallback;
+  try {
+    body = await req.json();
+  } catch (err) {
+    console.error("[whatsapp webhook] failed to parse request body as JSON", err);
+    return NextResponse.json({ ok: false, error: "invalid_json" }, { status: 400 });
+  }
 
   const text = body.text?.message;
-  const shouldProcess =
-    body.type === "ReceivedCallback" &&
-    !body.fromMe &&
-    !body.isGroup &&
-    body.phone === ALLOWED_PHONE &&
-    text &&
-    text.length >= MIN_LENGTH;
+  const ignoreReason =
+    body.type !== "ReceivedCallback"
+      ? "wrong_event_type"
+      : body.fromMe
+        ? "from_me"
+        : body.isGroup
+          ? "is_group"
+          : body.phone !== ALLOWED_PHONE
+            ? "phone_not_allowed"
+            : !text
+              ? "no_text"
+              : text.length < MIN_LENGTH
+                ? "text_too_short"
+                : null;
 
-  if (!shouldProcess || !text) {
-    return NextResponse.json({ ok: true, ignored: true });
+  if (ignoreReason || !text) {
+    console.log("[whatsapp webhook] ignored message", { reason: ignoreReason, phone: body.phone });
+    return NextResponse.json({ ok: true, ignored: true, reason: ignoreReason });
   }
 
+  let data;
   try {
-    const data = await extractDocument(text);
-    const document = await createDocument({
-      phone: body.phone,
-      originalText: text,
-      data,
-    });
-
-    const link = `${process.env.NEXT_PUBLIC_APP_URL}/d/${document.id}`;
-    await sendMessage(body.phone, `Recebi! Confere aqui: ${link}`);
+    data = await extractDocument(text);
   } catch (err) {
-    console.error("failed to process whatsapp message", err);
-    await sendMessage(
-      body.phone,
-      "Não consegui entender essa mensagem, tenta descrever de outro jeito.",
-    );
+    console.error("[whatsapp webhook] extractDocument failed", { phone: body.phone, text, err });
+    await safeReply(body.phone, "Não consegui entender essa mensagem, tenta descrever de outro jeito.");
+    return NextResponse.json({ ok: false, error: "extraction_failed" }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true });
+  let document;
+  try {
+    document = await createDocument({ phone: body.phone, originalText: text, data });
+  } catch (err) {
+    console.error("[whatsapp webhook] createDocument failed", { phone: body.phone, data, err });
+    await safeReply(body.phone, "Entendi a mensagem, mas não consegui salvar. Tenta de novo em um instante.");
+    return NextResponse.json({ ok: false, error: "save_failed" }, { status: 500 });
+  }
+
+  const link = `${process.env.NEXT_PUBLIC_APP_URL}/d/${document.id}`;
+  await safeReply(body.phone, `Recebi! Confere aqui: ${link}`);
+
+  return NextResponse.json({ ok: true, documentId: document.id });
+}
+
+// Nunca deixa uma falha no envio da resposta derrubar o request - só loga.
+async function safeReply(phone: string, message: string) {
+  try {
+    await sendMessage(phone, message);
+  } catch (err) {
+    console.error("[whatsapp webhook] sendMessage failed", { phone, message, err });
+  }
 }

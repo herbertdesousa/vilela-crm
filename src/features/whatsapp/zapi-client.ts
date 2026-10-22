@@ -5,7 +5,7 @@ const INSTANCE_TOKEN = process.env.ZAPI_INSTANCE_TOKEN!;
 const CLIENT_TOKEN = process.env.ZAPI_CLIENT_TOKEN!;
 
 export async function sendMessage(phone: string, message: string) {
-  await fetch(
+  const response = await fetch(
     `https://api.z-api.io/instances/${INSTANCE_ID}/token/${INSTANCE_TOKEN}/send-text`,
     {
       method: "POST",
@@ -16,4 +16,10 @@ export async function sendMessage(phone: string, message: string) {
       body: JSON.stringify({ phone, message }),
     },
   );
+
+  if (!response.ok) {
+    const body = await response.text();
+    console.error("[zapi] send-text failed", { status: response.status, body, phone });
+    throw new Error(`zapi send-text failed with status ${response.status}`);
+  }
 }

@@ -18,6 +18,10 @@ export async function extractDocument(whatsappText: string): Promise<ExtractedDo
   });
 
   if (!response.parsed_output) {
+    console.error("[extractDocument] parsed_output is null", {
+      stopReason: response.stop_reason,
+      content: response.content,
+    });
     throw new Error("Claude could not structure this message");
   }
   return response.parsed_output;
